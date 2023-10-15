@@ -1,32 +1,49 @@
 package main
 
 import (
-	"encoding/json" // New import
 	"net/http"
 )
 
 func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
-	// Create a map which holds the information that we want to send in the response.
 	data := map[string]string{
 		"status":      "available",
 		"environment": app.config.env,
 		"version":     version,
 	}
-	// Pass the map to the json.Marshal() function. This returns a []byte slice
-	// containing the encoded JSON. If there was an error, we log it and send the client
-	// a generic error message.
-	js, err := json.Marshal(data)
+	err := app.writeJSON(w, http.StatusOK, data, nil)
 	if err != nil {
 		app.logger.Println(err)
 		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
-		return
 	}
-	// Append a newline to the JSON. This is just a small nicety to make it easier to
-	// view in terminal applications.
-	js = append(js, '\n')
-	// At this point we know that encoding the data worked without any problems, so we
-	// can safely set any necessary HTTP headers for a successful response.
-	w.Header().Set("Content-Type", "application/json")
-	// Use w.Write() to send the []byte slice containing the JSON as the response body.
-	w.Write(js)
+}
+func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
+	// Declare an envelope map containing the data for the response. Notice that the way
+	// we've constructed this means the environment and version data will now be nested
+	// under a system_info key in the JSON response.
+	env := envelope{
+		"status": "available",
+		"system_info": map[string]string{
+			"environment": app.config.env,
+			"version":     version,
+		},
+	}
+	err := app.writeJSON(w, http.StatusOK, env, nil)
+	if err != nil {
+		app.logger.Println(err)
+		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+	}
+}
+func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
+	env := envelope{
+		"status": "available",
+		"system_info": map[string]string{
+			"environment": app.config.env,
+			"version":     version,
+		},
+	}
+	err := app.writeJSON(w, http.StatusOK, env, nil)
+	if err != nil {
+		// Use the new serverErrorResponse() helper.
+		app.serverErrorResponse(w, r, err)
+	}
 }

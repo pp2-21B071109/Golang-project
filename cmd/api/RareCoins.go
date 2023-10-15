@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"greenlight/internal/data" // New import
 	"net/http"
 	"strconv"
+	"time" // New import
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -33,6 +35,59 @@ func (app *application) showRareCoinsHandler(w http.ResponseWriter, r *http.Requ
 		http.NotFound(w, r)
 		return
 	}
-	// Otherwise, interpolate the movie ID in a placeholder response.
-	fmt.Fprintf(w, "show the details of RareCoin %d\n", id)
-}
+	RareCoin := data.RareCoin{
+		ID:        id,
+		CreatedAt: time.Now(),
+		Title:     "Шиллинг новая Ангия",
+		Genres:    []string{"England", "12 pence"},
+		Price:     414000,
+	}
+	// Encode the struct to JSON and send it as the HTTP response.
+	err = app.writeJSON(w, http.StatusOK, movie, nil)
+	if err != nil {
+		app.logger.Println(err)
+		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+	}
+	func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request) {
+		id, err := app.readIDParam(r)
+		if err != nil {
+		http.NotFound(w, r)
+		return
+		}
+		RareCoin := data.RareCoin{
+			ID:        id,
+			CreatedAt: time.Now(),
+			Title:     "Шиллинг новая Ангия",
+			Genres:    []string{"England", "12 pence"},
+			Price:     414000,
+		}
+		}
+		// Create an envelope{"movie": movie} instance and pass it to writeJSON(), instead
+		// of passing the plain movie struct.
+		err = app.writeJSON(w, http.StatusOK, envelope{"RareCoin": RareCoin}, nil)
+		if err != nil {
+		app.logger.Println(err)
+		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+		}
+		func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request) {
+			id, err := app.readIDParam(r)
+			if err != nil {
+			// Use the new notFoundResponse() helper.
+			app.notFoundResponse(w, r)
+			return
+			}
+			RareCoin := data.RareCoin{
+				ID:        id,
+				CreatedAt: time.Now(),
+				Title:     "Шиллинг новая Ангия",
+				Genres:    []string{"England", "12 pence"},
+				Price:     414000,
+			}
+			err = app.writeJSON(w, http.StatusOK, envelope{"RareCoin": RareCoin}, nil)
+			if err != nil {
+			// Use the new serverErrorResponse() helper.
+			app.serverErrorResponse(w, r, err)
+			}
+			}
+			
+		}
