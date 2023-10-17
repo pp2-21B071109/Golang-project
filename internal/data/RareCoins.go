@@ -1,8 +1,9 @@
 package data
 
 import (
-	"greenlight/internal/validator" // New import
 	"time"
+
+	"greenlight.dimash.net/internal/validator" // New import
 )
 
 type RareCoin struct {
