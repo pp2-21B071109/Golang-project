@@ -1,50 +1,46 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
-	"time"
 
 	"greenlight.dimash.net/internal/data"
 	// New import
 )
 
-func (app *application) createRareCoinsHandler(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Title  string   `json:"title"`
-		Year   int32    `json:"year"`
-		Genres []string `json:"genres"`
-	}
-	err := app.readJSON(w, r, &input)
-	if err != nil {
-		app.badRequestResponse(w, r, err)
-		return
-	}
-	fmt.Fprintf(w, "%+v\n", input)
+type MockCoinModel struct{}
+
+func (m MockCoinModel) Insert(coin *Coin) error {
+	// Mock the action...
+}
+func (m MockCoinModel) Get(id int64) (*Coin, error) {
+	// Mock the action...
+}
+func (m MockCoinModel) Update(coin *Coin) error {
+	// Mock the action...
+}
+func (m MockCoinModel) Delete(id int64) error {
+	// Mock the action...
 }
 
-func (app *application) showRareCoinsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) showMCoinHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
-		// Use the new notFoundResponse() helper.
 		app.notFoundResponse(w, r)
 		return
 	}
-	rareCoin := data.RareCoin{
-		ID:        id,
-		CreatedAt: time.Now(),
-		Title:     "Шиллинг новая Ангия",
-		Genres:    []string{"England", "12 pence"},
-		Price:     414000,
-	}
-
-	// Create an envelope{"RareCoin": rareCoin} instance.
-	envelope := envelope{"RareCoin": rareCoin}
-
-	// Pass the envelope to writeJSON.
-	err = app.writeJSON(w, http.StatusOK, envelope, nil)
+	coin, err := app.models.Coins.Get(id)
 	if err != nil {
-		// Use the new serverErrorResponse() helper.
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{"coin": coin}, nil)
+	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 }

@@ -1,0 +1,2 @@
+ALTER TABLE coins DROP CONSTRAINT IF EXISTS coins_year_check;
+ALTER TABLE coins DROP CONSTRAINT IF EXISTS coins_length_check;
