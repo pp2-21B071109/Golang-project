@@ -1,103 +1,189 @@
 package data
 
 import (
+	"context" // New import
 	"database/sql"
+	"fmt"
 	"time"
-	
+
 	"errors"
+
 	"github.com/lib/pq"
-	"greenlight.dimash.net/internal/validator" // New import
+	"greenlight.alexedwards.net/internal/validator"
 )
 
-type RareCoin struct {
+type Coin struct {
 	ID        int64     `json:"id"`
 	CreatedAt time.Time `json:"-"`
 	Title     string    `json:"title"`
 	Year      int32     `json:"year,omitempty"`
+	Runtime   int32     `json:"runtime,omitempty"`
 	Genres    []string  `json:"genres,omitempty"`
-	Price     int32     `json:"version"`
+	Version   int32     `json:"version"`
 }
 
-func ValidateMovie(v *validator.Validator, rarecoin *RareCoin) {
-	v.Check(rarecoin.Title != "", "title", "must be provided")
-	v.Check(len(rarecoin.Title) <= 500, "title", "must not be more than 500 bytes long")
-	v.Check(rarecoin.Year != 0, "year", "must be provided")
-	v.Check(rarecoin.Year >= 1888, "year", "must be greater than 1888")
-	v.Check(rarecoin.Year <= int32(time.Now().Year()), "year", "must not be in the future")
-	v.Check(rarecoin.Genres != nil, "genres", "must be provided")
-	v.Check(len(rarecoin.Genres) >= 1, "genres", "must contain at least 1 genre")
-	v.Check(len(rarecoin.Genres) <= 5, "genres", "must not contain more than 5 genres")
-	v.Check(validator.Unique(rarecoin.Genres), "genres", "must not contain duplicate values")
+func ValidateCoin(v *validator.Validator, coin *Coin) {
+	v.Check(coin.Title != "", "title", "must be provided")
+	v.Check(len(coin.Title) <= 500, "title", "must not be more than 500 bytes long")
+	v.Check(coin.Year != 0, "year", "must be provided")
+	v.Check(coin.Year >= 1888, "year", "must be greater than 1888")
+	v.Check(coin.Year <= int32(time.Now().Year()), "year", "must not be in the future")
+	v.Check(coin.Genres != nil, "genres", "must be provided")
+	v.Check(len(coin.Genres) >= 1, "genres", "must contain at least 1 genre")
+	v.Check(len(coin.Genres) <= 5, "genres", "must not contain more than 5 genres")
+	v.Check(validator.Unique(coin.Genres), "genres", "must not contain duplicate values")
 }
 
 type CoinModel struct {
 	DB *sql.DB
 }
 
-// Add a placeholder method for inserting a new record in the movies table.
+// Add a placeholder method for inserting a new record in the coins table.
 func (m CoinModel) Insert(coin *Coin) error {
-	// Define the SQL query for inserting a new record in the movies table and returning
-	// the system-generated data.
 	query := `
-	INSERT INTO movies (title, year, runtime, genres)
+	INSERT INTO coins (title, year, runtime, genres)
 	VALUES ($1, $2, $3, $4)
 	RETURNING id, created_at, version`
-	// Create an args slice containing the values for the placeholder parameters from
-	// the movie struct. Declaring this slice immediately next to our SQL query helps to
-	// make it nice and clear *what values are being used where* in the query.
-	args := []interface{}{coin.Title, coin.Year, pq.Array(coin.Genres), coin.Price}
-	// Use the QueryRow() method to execute the SQL query on our connection pool,
-	// passing in the args slice as a variadic parameter and scanning the system-
-	// generated id, created_at and version values into the movie struct.
-	return m.DB.QueryRow(query, args...).Scan(&coin.ID, &coin.CreatedAt, &coin.Version)
+	args := []interface{}{coin.Title, coin.Year, coin.Runtime, pq.Array(coin.Genres)}
+	// Create a context with a 3-second timeout.
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// Use QueryRowContext() and pass the context as the first argument.
+	return m.DB.QueryRowContext(ctx, query, args...).Scan(&coin.ID, &coin.CreatedAt, &coin.Version)
 }
-
-// Add a placeholder method for fetching a specific record from the movies table.
 func (m CoinModel) Get(id int64) (*Coin, error) {
-	// The PostgreSQL bigserial type that we're using for the movie ID starts
-	// auto-incrementing at 1 by default, so we know that no movies will have ID values
-	// less than that. To avoid making an unnecessary database call, we take a shortcut
-	// and return an ErrRecordNotFound error straight away.
 	if id < 1 {
-	return nil, ErrRecordNotFound
+		return nil, ErrRecordNotFound
+	}
+	// Remove the pg_sleep(10) clause.
+	query := `
+	SELECT id, created_at, title, year, runtime, genres, version
+	FROM coins
+	WHERE id = $1`
+	var coin Coin
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// Remove &[]byte{} from the first Scan() destination.
+	err := m.DB.QueryRowContext(ctx, query, id).Scan(
+		&coin.ID,
+		&coin.CreatedAt,
+		&coin.Title,
+		&coin.Year,
+		&coin.Runtime,
+		pq.Array(&coin.Genres),
+		&coin.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &coin, nil
+}
+func (m CoinModel) Update(coin *Coin) error {
+	query := `
+	UPDATE coins
+	SET title = $1, year = $2, runtime = $3, genres = $4, version = version + 1
+	WHERE id = $5 AND version = $6
+	RETURNING version`
+	args := []interface{}{
+		coin.Title,
+		coin.Year,
+		coin.Runtime,
+		pq.Array(coin.Genres),
+		coin.ID,
+		coin.Version,
+	}
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// Use QueryRowContext() and pass the context as the first argument.
+	// Use QueryRowContext() and pass the context as the first argument.
+	err := m.DB.QueryRowContext(ctx, query, args...).Scan(&coin.Version)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrEditConflict
+		default:
+			return err
+		}
+	}
+	return nil
+}
+func (m CoinModel) Delete(id int64) error {
+	if id < 1 {
+		return ErrRecordNotFound
 	}
 	query := `
-SELECT id, created_at, title, year, runtime, genres, version
-FROM movies
-WHERE id = $1`
-
-var coin Coin
-// Execute the query using the QueryRow() method, passing in the provided id value
-// as a placeholder parameter, and scan the response data into the fields of the
-// Movie struct. Importantly, notice that we need to convert the scan target for the
-// genres column using the pq.Array() adapter function again.
-err := m.DB.QueryRow(query, id).Scan(
-&movie.ID,
-&movie.CreatedAt,
-&movie.Title,
-&movie.Year,
-pq.Array(&movie.Genres),
-&movie.Price,
-)
-// Handle any errors. If there was no matching movie found, Scan() will return
-// a sql.ErrNoRows error. We check for this and return our custom ErrRecordNotFound
-// error instead.
-if err != nil {
-switch {
-case errors.Is(err, sql.ErrNoRows):
-return nil, ErrRecordNotFound
-default:
-return nil, err
-}
-}
-// Otherwise, return a pointer to the Movie struct.
-return &movie, nil
-// Add a placeholder method for updating a specific record in the movies table.
-func (m Coin) Update(m coin *Coin) error {
+	DELETE FROM coins
+	WHERE id = $1`
+	// Create a context with a 3-second timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// Use ExecContext() and pass the context as the first argument.
+	result, err := m.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
 	return nil
 }
 
-// Add a placeholder method for deleting a specific record from the movies table.
-func (m CoinModel) Delete(id int64) error {
-	return nil
+func (m CoinModel) GetAll(title string, genres []string, filters Filters) ([]*Coin, Metadata, error) {
+	// Update the SQL query to include the window function which counts the total
+	// (filtered) records.
+	// (filtered) records.
+	query := fmt.Sprintf(`
+	SELECT count(*) OVER(), id, created_at, title, year, runtime, genres, version
+	FROM coins
+	WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
+	AND (genres @> $2 OR $2 = '{}')
+	ORDER BY %s %s, id ASC
+	LIMIT $3 OFFSET $4`, filters.sortColumn(), filters.sortDirection())
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	args := []interface{}{title, pq.Array(genres), filters.limit(), filters.offset()}
+	rows, err := m.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+	}
+	defer rows.Close()
+	// Declare a totalRecords variable.
+	totalRecords := 0
+	coins := []*Coin{}
+	for rows.Next() {
+		var coin Coin
+		err := rows.Scan(
+			&totalRecords, // Scan the count from the window function into totalRecords.
+			&coin.ID,
+			&coin.CreatedAt,
+			&coin.Title,
+			&coin.Year,
+			&coin.Runtime,
+			pq.Array(&coin.Genres),
+			&coin.Version,
+		)
+		if err != nil {
+			return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+		}
+		coins = append(coins, &coin)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, Metadata{}, err // Update this to return an empty Metadata struct.
+	}
+	// Generate a Metadata struct, passing in the total record count and pagination
+	// parameters from the client.
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+	// Include the metadata struct when returning.
+	return coins, metadata, nil
 }
