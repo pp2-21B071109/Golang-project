@@ -7,3 +7,4 @@ require (
 	greenlight.alexedwards.net/validator v0.0.0-20220106073102-0f85825a3012
 
 )
+replace greenlight.alexedwards.net/validator => greenlight.alexedwards.net/validator v0.0.0-20220106073102-0f85825a3012
