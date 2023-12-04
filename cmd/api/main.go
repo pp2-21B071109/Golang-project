@@ -6,21 +6,20 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
+	"os" // New import
+	"strings"
 	"sync"
 	"time"
 
 	_ "github.com/lib/pq"
 	"greenlight.alexedwards.net/internal/data"
 	"greenlight.alexedwards.net/internal/jsonlog"
-	"greenlight.alexedwards.net/internal/mailer" // New import
+	"greenlight.alexedwards.net/internal/mailer"
 	"greenlight.alexedwards.net/internal/validator"
 )
 
 const version = "1.0.0"
 
-// Update the config struct to hold the SMTP server settings.
-// Update the config struct to hold the SMTP server settings.
 type config struct {
 	port int
 	env  string
@@ -41,6 +40,10 @@ type config struct {
 		username string
 		password string
 		sender   string
+	}
+	// Add a cors struct and trustedOrigins field with the type []string.
+	cors struct {
+		trustedOrigins []string
 	}
 }
 
@@ -73,6 +76,10 @@ func main() {
 	flag.StringVar(&cfg.smtp.username, "smtp-username", "13aba2ce443ca4", "SMTP username")
 	flag.StringVar(&cfg.smtp.password, "smtp-password", "3be67c83b7ebe2", "SMTP password")
 	flag.StringVar(&cfg.smtp.sender, "smtp-sender", "Greenlight <no-reply@greenlight.alexedwards.net>", "SMTP sender")
+	flag.Func("cors-trusted-origins", "Trusted CORS origins (space separated)", func(val string) error {
+		cfg.cors.trustedOrigins = strings.Fields(val)
+		return nil
+	})
 	flag.Parse()
 	logger := jsonlog.New(os.Stdout, jsonlog.LevelInfo)
 	db, err := openDB(cfg)
