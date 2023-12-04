@@ -11,10 +11,15 @@ func (app *application) routes() http.Handler {
 	router.NotFound = http.HandlerFunc(app.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(app.methodNotAllowedResponse)
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
-	router.HandlerFunc(http.MethodGet, "/v1/coins", app.listCoinsHandler)
-	router.HandlerFunc(http.MethodPatch, "/v1/coins/:id", app.updateCoinHandler)
-	router.HandlerFunc(http.MethodDelete, "/v1/coins/:id", app.deleteCoinHandler)
+	// Use the requirePermission() middleware on each of the /v1/coins** endpoints,
+	// passing in the required permission code as the first parameter.
+	router.HandlerFunc(http.MethodGet, "/v1/coins", app.requirePermission("coins:read", app.listCoinsHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/coins", app.requirePermission("coins:write", app.createCoinHandler))
+	router.HandlerFunc(http.MethodGet, "/v1/coins/:id", app.requirePermission("coins:read", app.showCoinHandler))
+	router.HandlerFunc(http.MethodPatch, "/v1/coins/:id", app.requirePermission("coins:write", app.updateCoinHandler))
+	router.HandlerFunc(http.MethodDelete, "/v1/coins/:id", app.requirePermission("coins:write", app.deleteCoinHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/users", app.registerUserHandler)
 	router.HandlerFunc(http.MethodPut, "/v1/users/activated", app.activateUserHandler)
-	return app.recoverPanic(app.rateLimit(router))
+	router.HandlerFunc(http.MethodPost, "/v1/tokens/authentication", app.createAuthenticationTokenHandler)
+	return app.recoverPanic(app.rateLimit(app.authenticate(router)))
 }
