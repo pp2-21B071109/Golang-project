@@ -112,7 +112,7 @@ func (app *application) updateCoinHandler(w http.ResponseWriter, r *http.Request
 		coin.Year = *input.Year
 	}
 	if input.Runtime != nil {
-		coin.Runtime = *input.Runtime
+		coin.Runtime = int32(*input.Runtime)
 	}
 	if input.Genres != nil {
 		coin.Genres = input.Genres
